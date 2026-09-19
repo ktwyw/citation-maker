@@ -6,6 +6,7 @@ Look up by DOI (CrossRef, no key needed) or format a record you supply as JSON.
 
     python cite.py 10.1038/s41586-020-2649-2            # all four styles
     python cite.py 10.1038/s41586-020-2649-2 --style gost71
+    python cite.py 10.1038/s41586-020-2649-2 --style bibtex >> refs.bib
     python cite.py --title "Attention is all you need"  # best title match; confirm the DOI
     python cite.py 10.1234/x --json > ref.json           # save the fetched record to edit
     python cite.py --from ref.json                       # format an edited record
@@ -235,8 +236,49 @@ def gost705(f: dict) -> str:
     return f"{lead}{f['title']}." + (f" {f['container']}." if f["container"] else "") + f" {f['year']}.{doi}"
 
 
+_CYR = {"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z", "и": "i", "й": "i",
+        "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f",
+        "х": "kh", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "shch", "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+        "ә": "a", "ғ": "g", "қ": "q", "ң": "n", "ө": "o", "ұ": "u", "ү": "u", "һ": "h", "і": "i"}
+
+
+def bib_key(f: dict) -> str:
+    """first author (ASCII) + year + first title word, e.g. bekova2025deep"""
+    import unicodedata
+    def fold(s):
+        s = "".join(_CYR.get(c.lower(), c) for c in s)
+        s = unicodedata.normalize("NFD", s)
+        return re.sub(r"[^a-z0-9]", "", s.lower())
+    a = f["authors"][0]["family"] if f["authors"] else "anon"
+    w = re.search(r"\w+", f["title"])
+    return f"{fold(a) or 'anon'}{f['year'] or 'nd'}{fold(w.group(0)) if w else 'ref'}"
+
+
+def bibtex(f: dict) -> str:
+    etype = {"journal-article": "article", "book": "book", "book-chapter": "incollection",
+             "proceedings-article": "inproceedings", "other": "misc"}.get(f["type"], "misc")
+    people = lambda lst: " and ".join(f"{p['family']}, {p['given']}" if p.get("given") else p["family"] for p in lst)
+    fields = []
+    add = lambda k, v: fields.append(f"  {k:<9} = {{{v}}}") if v else None
+    add("author", people(f["authors"]))
+    add("title", f["title"])
+    if f["type"] == "journal-article":
+        add("journal", f["container"])
+    elif f["type"] in ("book-chapter", "proceedings-article"):
+        add("booktitle", f["container"])
+    elif f["type"] == "other":
+        add("howpublished", f["container"])
+    add("editor", people(f["editors"]))
+    add("year", f["year"]); add("volume", f["volume"]); add("number", f["issue"])
+    add("pages", dash(f["pages"]).replace("–", "--"))
+    add("publisher", f["publisher"]); add("address", f["place"])
+    add("doi", bare_doi(f["doi"]) if f["doi"] else ""); add("url", f["url"])
+    return f"@{etype}{{{bib_key(f)},\n" + ",\n".join(fields) + "\n}"
+
+
 STYLES = {"apa": ("APA 7", apa), "vancouver": ("Vancouver", vancouver),
-          "gost71": ("GOST 7.1-2003", gost71), "gost705": ("GOST R 7.0.5-2008", gost705)}
+          "gost71": ("GOST 7.1-2003", gost71), "gost705": ("GOST R 7.0.5-2008", gost705),
+          "bibtex": ("BibTeX", bibtex)}
 
 REQUIRED = {"journal-article": ["authors", "title", "container", "year"], "book": ["authors", "title", "publisher", "year"],
             "book-chapter": ["authors", "title", "container", "publisher", "year"],

@@ -4,7 +4,7 @@ Look a paper up by DOI or title, check and correct the fields, and get the
 reference in **APA 7**, **Vancouver**, **GOST 7.1-2003** (the standard adopted
 in Kazakhstan as СТ РК ГОСТ 7.1-2003) and **GOST R 7.0.5-2008** (the short
 form many Russian journals use). Build a bibliography, copy it in any style,
-or export RIS for Zotero, Mendeley and EndNote.
+or export RIS (Zotero, Mendeley, EndNote) or BibTeX (LaTeX, JabRef).
 
 Two versions with the same formatting rules:
 
@@ -45,7 +45,8 @@ the common gaps above.
 2. Correct anything in the form; all four references update as you type.
 3. Copy the one you need, or **Add to bibliography**. The list is saved in
    your browser; choose a style, sort by author or as added, then copy,
-   download `.txt` or **Export RIS**.
+   download `.txt`, **Export RIS** or **Export .bib**. Each reference also shows
+   its BibTeX entry with a generated key such as `bekova2025deep`.
 
 The page must be served from a normal web address (GitHub Pages or opened
 locally) for the CrossRef lookup to work; some sandboxed previews block it.
@@ -55,6 +56,7 @@ locally) for the CrossRef lookup to work; some sandboxed previews block it.
 ```
 python cite.py 10.1038/s41586-020-2649-2              # all four styles
 python cite.py 10.1038/s41586-020-2649-2 --style gost71
+python cite.py 10.1038/s41586-020-2649-2 --style bibtex >> refs.bib
 python cite.py --title "Attention is all you need"    # best match; confirm the DOI
 python cite.py 10.1234/x --json > ref.json             # save the record, edit it…
 python cite.py --from ref.json --sentence-case         # …then format the edited record
@@ -77,6 +79,5 @@ given names are initials only`.
 ## Ideas for next steps
 
 - In-text citation helper (APA author–date, Vancouver numbers)
-- BibTeX export
 - Batch mode: a file of DOIs in, a formatted list out
 - Kazakh transliteration of author names for GOST lists in Latin script

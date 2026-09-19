@@ -168,6 +168,8 @@
             <div id="gost71" class="ref"></div>
             <h3>GOST R 7.0.5-2008 <button class="ghost" data-copy="gost705" type="button">copy</button></h3>
             <div id="gost705" class="ref"></div>
+            <h3>BibTeX <button class="ghost" data-copy="bibtex" type="button">copy</button></h3>
+            <pre id="bibtex" class="ref" style="margin:0;white-space:pre-wrap;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.82rem"></pre>
           </div>
           <div class="actions">
             <button id="add" type="button">Add to bibliography</button>
@@ -176,7 +178,7 @@
 
         <div class="card">
           <h2>4. Bibliography</h2>
-          <p class="sub">Saved in this browser. Choose a style and copy the whole list, or export RIS to import into Zotero, Mendeley or EndNote.</p>
+          <p class="sub">Saved in this browser. Choose a style and copy the whole list, or export RIS (Zotero, Mendeley, EndNote) or BibTeX (LaTeX, JabRef).</p>
           <div class="row">
             <div><label for="bibstyle">Style</label>
               <select id="bibstyle">
@@ -191,6 +193,7 @@
             <button id="copyall" class="secondary" type="button">Copy list</button>
             <button id="downtxt" class="secondary" type="button">Download .txt</button>
             <button id="downris" class="secondary" type="button">Export RIS</button>
+            <button id="downbib" class="secondary" type="button">Export .bib</button>
             <button id="clearbib" class="ghost" type="button">Clear bibliography</button>
           </div>
         </div>
@@ -417,6 +420,38 @@
       }
     }
 
+    // ---------- BibTeX ----------
+    // Key: first author's family name (ASCII-folded) + year + first title word, e.g. bekova2025deep
+    function bibKey(f) {
+      const fold = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[а-яё]/gi, c => ({а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"e",ж:"zh",з:"z",и:"i",й:"i",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"kh",ц:"ts",ч:"ch",ш:"sh",щ:"shch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya",ә:"a",ғ:"g",қ:"q",ң:"n",ө:"o",ұ:"u",ү:"u",һ:"h",і:"i"}[c.toLowerCase()] ?? ""))
+        .replace(/[^a-z0-9]/gi, "").toLowerCase();
+      const a = parsePeople(f.authors)[0]?.family || "anon";
+      const w = (f.title.match(/[\p{L}\p{N}]+/u) || ["ref"])[0];
+      return `${fold(a) || "anon"}${f.year || "nd"}${fold(w)}`;
+    }
+    function bibtex(f) {
+      const type = { "journal-article": "article", "book": "book", "book-chapter": "incollection", "proceedings-article": "inproceedings", "other": "misc" }[f.type] || "misc";
+      const people = list => list.map(p => p.given ? `${p.family}, ${p.given}` : p.family).join(" and ");
+      const fields = [];
+      const add = (k, v) => { if (v) fields.push(`  ${k.padEnd(9)} = {${v}}`); };
+      add("author", people(parsePeople(f.authors)));
+      add("title", f.title);
+      if (f.type === "journal-article") add("journal", f.container);
+      else if (f.type === "book-chapter" || f.type === "proceedings-article") add("booktitle", f.container);
+      else if (f.type === "other") add("howpublished", f.container);
+      add("editor", people(parsePeople(f.editors)));
+      add("year", f.year);
+      add("volume", f.volume);
+      add("number", f.issue);
+      add("pages", dash(f.pages).replace("–", "--"));
+      add("publisher", f.publisher);
+      add("address", f.place);
+      add("doi", f.doi ? f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "") : "");
+      add("url", f.url);
+      return `@${type}{${bibKey(f)},\n${fields.join(",\n")}\n}`;
+    }
+
     // ---------- warnings ----------
     function warnings(f) {
       const w = [];
@@ -440,6 +475,7 @@
       $("container-label").textContent = f.type === "book-chapter" ? "Book title" : f.type === "proceedings-article" ? "Conference / proceedings title" : "Journal";
       $("container").disabled = isBook; $("short").disabled = f.type !== "journal-article";
       $("apa").innerHTML = apa(f); $("van").innerHTML = vancouver(f); $("gost71").innerHTML = gost71(f); $("gost705").innerHTML = gost705(f);
+      $("bibtex").textContent = f.title ? bibtex(f) : "";
       $("warnings").innerHTML = warnings(f).map(w => `<li>${w}</li>`).join("");
       $("add").disabled = !f.title;
     }
@@ -500,7 +536,7 @@
     $("clear").addEventListener("click", clearFields);
     $("sentence").addEventListener("click", () => { $("title").value = sentenceCase($("title").value); render(); });
     FIELDS.forEach(k => $(k).addEventListener("input", render));
-    document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => copy(plain($(b.dataset.copy).innerHTML), b)));
+    document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => copy(b.dataset.copy === "bibtex" ? $("bibtex").textContent : plain($(b.dataset.copy).innerHTML), b)));
     $("add").addEventListener("click", () => { bib.push(getFields()); saveBib(); renderBib(); });
     $("bib").addEventListener("click", e => {
       if (e.target.dataset.del !== undefined) { bib.splice(+e.target.dataset.del, 1); saveBib(); renderBib(); }
@@ -511,6 +547,7 @@
     $("copyall").addEventListener("click", e => copy(bibText(), e.target));
     $("downtxt").addEventListener("click", () => download(bibText(), "bibliography.txt", "text/plain"));
     $("downris").addEventListener("click", () => download(ris(), "bibliography.ris", "application/x-research-info-systems"));
+    $("downbib").addEventListener("click", () => download(orderedBib().map(({ f }) => bibtex(f)).join("\n\n") + "\n", "bibliography.bib", "application/x-bibtex"));
     $("clearbib").addEventListener("click", () => { if (confirm("Remove all saved references?")) { bib = []; saveBib(); renderBib(); } });
 
     render(); renderBib();
