@@ -98,11 +98,17 @@
       <div>
         <div class="card">
           <h2>1. Find or enter the source</h2>
+          <div class="row" style="margin-bottom:8px">
+            <label class="check" style="margin:0;display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="article" checked style="width:auto"> Article — DOI or title (CrossRef)</label>
+            <label class="check" style="margin:0;display:flex;gap:6px;align-items:center;color:var(--ink)"><input type="radio" name="src" value="book" style="width:auto"> Book — ISBN or title (Open Library)</label>
+          </div>
           <div class="lookup">
             <input id="q" type="text" placeholder="DOI (10.1234/abcd) or a paper title" autocomplete="off">
+            <input id="qa" type="text" placeholder="Author (optional)" autocomplete="off" style="flex:0 0 160px;display:none">
             <button id="lookup" type="button">Look up</button>
           </div>
           <p id="status" class="status"></p>
+          <ul id="candidates" class="bib" style="margin-top:6px"></ul>
           <div class="actions">
             <button id="manual" class="secondary" type="button">Enter manually</button>
             <button id="clear" class="ghost" type="button">Clear</button>
@@ -145,6 +151,10 @@
           <div class="row">
             <div><label for="publisher">Publisher</label><input id="publisher" type="text"></div>
             <div><label for="place">Place of publication</label><input id="place" type="text"></div>
+          </div>
+          <div class="row">
+            <div><label for="edition">Edition (e.g. 3rd, 2-е)</label><input id="edition" type="text"></div>
+            <div><label for="isbn">ISBN</label><input id="isbn" type="text"></div>
           </div>
           <label for="editors">Editors — one per line (for chapters and proceedings)</label>
           <textarea id="editors"></textarea>
@@ -207,7 +217,7 @@
 
   <script>
     const $ = id => document.getElementById(id);
-    const FIELDS = ["type", "authors", "title", "container", "short", "year", "volume", "issue", "pages", "doi", "publisher", "place", "editors", "url"];
+    const FIELDS = ["type", "authors", "title", "container", "short", "year", "volume", "issue", "pages", "doi", "publisher", "place", "editors", "url", "edition", "isbn"];
     const REQUIRED = {
       "journal-article": ["authors", "title", "container", "year"],
       "book": ["authors", "title", "publisher", "year"],
@@ -248,12 +258,82 @@
     }
     const cleanTitle = t => t.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 
+    // "Given Family" → {family, given}; names with initials ("Иванов И. И.") are family-first
+    function splitName(n) {
+      const parts = n.trim().split(/\s+/);
+      if (parts.length === 1) return { family: parts[0], given: "" };
+      if (parts.slice(1).every(x => /^[\p{Lu}]\.?$/u.test(x) || /^[\p{Lu}]\.[\p{Lu}]\.$/u.test(x))) return { family: parts[0], given: parts.slice(1).join(" ") };
+      return { family: parts[parts.length - 1], given: parts.slice(0, -1).join(" ") };
+    }
+    const nameLine = n => { const p = splitName(n); return p.given ? `${p.family}, ${p.given}` : p.family; };
+
+    async function openlib(path) {
+      const r = await fetch(`https://openlibrary.org/${path}`);
+      if (!r.ok) throw new Error(`Open Library replied ${r.status}`);
+      return r.json();
+    }
+    // Fill the form from an Open Library edition record (from /isbn/... or /books/...)
+    async function fromEdition(ed, fallback = {}) {
+      let authors = fallback.authors || "";
+      if (ed.authors?.length) {
+        const names = await Promise.all(ed.authors.map(a => openlib(`${a.key}.json`).then(x => x.name).catch(() => "")));
+        if (names.filter(Boolean).length) authors = names.filter(Boolean).map(nameLine).join("\n");
+      }
+      const year = (ed.publish_date || "").match(/\d{4}/)?.[0] || fallback.year || "";
+      return {
+        type: "book", authors, editors: "", title: [ed.title, ed.subtitle].filter(Boolean).join(": "),
+        container: "", short: "", year, volume: "", issue: "",
+        pages: ed.number_of_pages ? String(ed.number_of_pages) : (fallback.pages || ""),
+        doi: "", publisher: ed.publishers?.[0] || fallback.publisher || "", place: ed.publish_places?.[0] || "",
+        edition: ed.edition_name || "", isbn: ed.isbn_13?.[0] || ed.isbn_10?.[0] || fallback.isbn || "", url: "",
+      };
+    }
+    async function bookByIsbn(isbn) {
+      const ed = await openlib(`isbn/${isbn}.json`);
+      setFields(await fromEdition(ed));
+      $("status").textContent = "Fetched the edition record from Open Library — check place, edition and pages against the title page.";
+    }
+    async function bookSearch(title, author) {
+      const res = await openlib(`search.json?title=${encodeURIComponent(title)}${author ? `&author=${encodeURIComponent(author)}` : ""}&limit=5&fields=title,author_name,first_publish_year,publisher,isbn,number_of_pages_median,cover_edition_key`);
+      const docs = res.docs || [];
+      if (!docs.length) throw new Error("no match");
+      $("candidates").innerHTML = docs.map((d, i) =>
+        `<li><span>${esc(d.title)} — ${esc((d.author_name || []).join(", ") || "unknown author")}, ${d.first_publish_year || "n.d."}${d.publisher?.[0] ? `, ${esc(d.publisher[0])}` : ""}</span><span class="btns"><button class="ghost" data-pick="${i}" type="button">use</button></span></li>`).join("");
+      $("candidates").dataset.docs = JSON.stringify(docs);
+      $("status").textContent = "Pick the right edition below (first published year shown; the edition record gives the exact year).";
+    }
+    async function pickCandidate(i) {
+      const d = JSON.parse($("candidates").dataset.docs)[i];
+      const fallback = { authors: (d.author_name || []).map(nameLine).join("\n"), year: d.first_publish_year ? String(d.first_publish_year) : "",
+                         publisher: d.publisher?.[0] || "", pages: d.number_of_pages_median ? String(d.number_of_pages_median) : "", isbn: d.isbn?.[0] || "" };
+      $("status").textContent = "Fetching edition details…";
+      try {
+        const ed = d.cover_edition_key ? await openlib(`books/${d.cover_edition_key}.json`) : (d.isbn?.[0] ? await openlib(`isbn/${d.isbn[0]}.json`) : null);
+        setFields(ed ? await fromEdition(ed, fallback) : { ...fallback, type: "book", title: d.title, editors: "", container: "", short: "", volume: "", issue: "", doi: "", place: "", edition: "", url: "" });
+        $("status").textContent = ed ? "Filled from the edition record — check place, edition, year and pages against the title page." : "Filled from the search record only — add place and check the year.";
+      } catch (err) { $("status").textContent = `Couldn't fetch the edition (${err.message}); filled from the search record.`; setFields({ ...fallback, type: "book", title: d.title }); }
+      $("candidates").innerHTML = "";
+    }
+
     async function lookup() {
       const q = $("q").value.trim();
       if (!q) return;
       const status = $("status");
       status.textContent = "Looking up…";
       $("lookup").disabled = true;
+      $("candidates").innerHTML = "";
+      if (document.querySelector('input[name="src"]:checked').value === "book") {
+        try {
+          const isbn = q.replace(/[-\s]/g, "");
+          if (/^(\d{9}[\dXx]|\d{13})$/.test(isbn)) await bookByIsbn(isbn);
+          else await bookSearch(q, $("qa").value.trim());
+        } catch (err) {
+          status.textContent = /Failed to fetch|NetworkError/.test(err.message)
+            ? "Couldn't reach Open Library (offline, or this page is sandboxed). Use manual entry."
+            : `Not found (${err.message}). Try adding the author, or use manual entry.`;
+        } finally { $("lookup").disabled = false; }
+        return;
+      }
       try {
         const doiMatch = q.match(/10\.\d{4,9}\/[^\s"<>]+/i);
         let w, note;
@@ -319,6 +399,9 @@
     }
 
     // ---------- styles ----------
+    // "3rd" → "3rd ed.", "2-е" → "2-е изд.", "3rd ed." stays
+    const apaEd = e => /ed\.|изд/i.test(e) ? e : (isCyr(e) ? `${e} изд.` : `${e} ed.`);
+
     function apa(f) {
       const A = parsePeople(f.authors), E = parsePeople(f.editors);
       let names;
@@ -336,9 +419,9 @@
         case "journal-article": case "proceedings-article":
           body = `${endDot(esc(f.title))} ${em(f.container)}${vol}${pg}.`; break;
         case "book":
-          body = `${em(endDot(f.title))} ${esc(f.publisher)}.`; break;
+          body = `${em(f.title)}${f.edition ? ` (${esc(apaEd(f.edition))})` : ""}. ${esc(f.publisher)}.`; break;
         case "book-chapter":
-          body = `${endDot(esc(f.title))} In ${eds ? eds + " " : ""}${em(f.container)}${f.pages ? ` (pp. ${esc(dash(f.pages))})` : ""}. ${esc(f.publisher)}.`; break;
+          body = `${endDot(esc(f.title))} In ${eds ? eds + " " : ""}${em(f.container)}${f.edition || f.pages ? ` (${[f.edition ? esc(apaEd(f.edition)) : "", f.pages ? `pp. ${esc(dash(f.pages))}` : ""].filter(Boolean).join(", ")})` : ""}. ${esc(f.publisher)}.`; break;
         default:
           body = `${em(endDot(f.title))}${f.container ? " " + esc(f.container) + "." : ""}${f.publisher ? " " + esc(f.publisher) + "." : ""}`;
       }
@@ -355,7 +438,7 @@
         case "journal-article": case "proceedings-article":
           body = `${endDot(esc(f.title))} ${esc(jr)}. ${esc(f.year)}${f.volume ? `;${esc(f.volume)}` : ""}${f.issue ? `(${esc(f.issue)})` : ""}${f.pages ? `:${esc(dash(f.pages))}` : ""}.`; break;
         case "book":
-          body = `${endDot(esc(f.title))} ${f.place ? esc(f.place) + ": " : ""}${esc(f.publisher)}; ${esc(f.year)}.`; break;
+          body = `${endDot(esc(f.title))} ${f.edition ? esc(apaEd(f.edition)) + " " : ""}${f.place ? esc(f.place) + ": " : ""}${esc(f.publisher)}; ${esc(f.year)}.`; break;
         case "book-chapter": {
           const E = parsePeople(f.editors).map(vanName).join(", ");
           body = `${endDot(esc(f.title))} In: ${E ? E + (parsePeople(f.editors).length > 1 ? ", editors. " : ", editor. ") : ""}${endDot(esc(f.container))} ${f.place ? esc(f.place) + ": " : ""}${esc(f.publisher)}; ${esc(f.year)}.${f.pages ? ` p. ${esc(dash(f.pages))}.` : ""}`; break;
@@ -376,7 +459,7 @@
       const resp = A.length === 0 ? "" : A.length <= 3 ? A.map(gostName).join(", ") : A.slice(0, 3).map(gostName).join(", ") + " " + T.etal;
       const pages = f.pages ? (/[–-]/.test(f.pages) ? `${T.p} ${dash(f.pages)}` : (cyr ? `Ст. ${f.pages}` : `Art. ${f.pages}`)) : "";
       const doi = f.doi ? `DOI: ${f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}` : (f.url ? `URL: ${f.url}` : "");
-      const join = parts => parts.filter(Boolean).map(esc).join(". – ") + ".";
+      const join = parts => parts.filter(Boolean).map(x => esc(x.replace(/\.$/, ""))).join(". – ") + ".";
       switch (f.type) {
         case "journal-article": case "proceedings-article": {
           const src = `${f.title} / ${resp} // ${f.container}`;
@@ -386,7 +469,8 @@
         case "book": {
           const src = `${f.title} / ${resp}`;
           const pub = [f.place, f.publisher].filter(Boolean).join(" : ") + (f.year ? `, ${f.year}` : "");
-          return esc(heading) + join([src, pub, f.pages ? `${f.pages} ${cyr ? "с" : "p"}` : "", doi]);
+          const ed = f.edition ? apaEd(f.edition) : "";
+          return esc(heading) + join([src, ed, pub, f.pages ? `${f.pages} ${cyr ? "с" : "p"}` : "", doi, f.isbn ? `ISBN ${f.isbn}` : ""]);
         }
         case "book-chapter": {
           const eds = E.length ? ` / ${T.ed} ${E.map(gostName).join(", ")}` : "";
@@ -412,7 +496,7 @@
         case "journal-article": case "proceedings-article":
           return `${esc(names)}${names ? " " : ""}${esc(f.title)} // ${esc(f.container)}. ${esc(f.year)}.${f.volume ? ` ${T.vol} ${esc(f.volume)}.` : ""}${f.issue ? ` ${T.no} ${esc(f.issue)}.` : ""}${pages}${doi}`.trim();
         case "book":
-          return `${esc(names)}${names ? " " : ""}${esc(f.title)}. ${[f.place, f.publisher].filter(Boolean).map(esc).join(": ")}, ${esc(f.year)}.${f.pages ? ` ${esc(f.pages)} ${cyr ? "с" : "p"}.` : ""}${doi}`.trim();
+          return `${esc(names)}${names ? " " : ""}${esc(f.title)}.${f.edition ? ` ${esc(apaEd(f.edition))}` : ""} ${[f.place, f.publisher].filter(Boolean).map(esc).join(": ")}, ${esc(f.year)}.${f.pages ? ` ${esc(f.pages)} ${cyr ? "с" : "p"}.` : ""}${doi}`.trim();
         case "book-chapter":
           return `${esc(names)}${names ? " " : ""}${esc(f.title)} // ${esc(f.container)}. ${[f.place, f.publisher].filter(Boolean).map(esc).join(": ")}, ${esc(f.year)}.${pages}${doi}`.trim();
         default:
@@ -447,6 +531,8 @@
       add("pages", dash(f.pages).replace("–", "--"));
       add("publisher", f.publisher);
       add("address", f.place);
+      add("edition", f.edition);
+      add("isbn", f.isbn);
       add("doi", f.doi ? f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "") : "");
       add("url", f.url);
       return `@${type}{${bibKey(f)},\n${fields.join(",\n")}\n}`;
@@ -461,8 +547,10 @@
       if (f.title && f.title === f.title.toUpperCase() && f.title.length > 10) w.push("Title is in capitals as deposited. Use the sentence-case button, then check proper nouns.");
       if (f.type === "journal-article" && !f.pages) w.push("No pages or article number — the article may be online-first. Add them when known.");
       if (f.type === "journal-article" && !f.volume) w.push("No volume — may be online-first or a journal without volumes.");
-      if (!f.doi && !f.url) w.push("No DOI or URL.");
-      if (f.type === "book" && !f.place) w.push("GOST wants a place of publication for books; CrossRef often lacks it.");
+      if (!f.doi && !f.url && f.type !== "book") w.push("No DOI or URL.");
+      if (f.type === "book" && !f.place) w.push("GOST wants a place of publication for books; check the title page.");
+      if (f.type === "book" && !f.isbn) w.push("No ISBN — GOST lists include it.");
+      if (f.type === "book" && !f.pages) w.push("No page count — GOST lists it (e.g. 832 p.).");
       return w;
     }
 
@@ -513,6 +601,8 @@
         if (f.pages) { const [sp, ep] = dash(f.pages).split("–"); L.push(`SP  - ${sp}`); if (ep) L.push(`EP  - ${ep}`); }
         if (f.publisher) L.push(`PB  - ${f.publisher}`);
         if (f.place) L.push(`CY  - ${f.place}`);
+        if (f.edition) L.push(`ET  - ${f.edition}`);
+        if (f.isbn) L.push(`SN  - ${f.isbn}`);
         if (f.doi) L.push(`DO  - ${f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}`);
         if (f.url) L.push(`UR  - ${f.url}`);
         L.push("ER  - ");
@@ -531,6 +621,13 @@
 
     // ---------- events ----------
     $("lookup").addEventListener("click", lookup);
+    document.querySelectorAll('input[name="src"]').forEach(r => r.addEventListener("change", () => {
+      const book = r.value === "book" && r.checked;
+      $("q").placeholder = book ? "ISBN (978…) or a book title" : "DOI (10.1234/abcd) or a paper title";
+      $("qa").style.display = book ? "" : "none";
+      $("candidates").innerHTML = "";
+    }));
+    $("candidates").addEventListener("click", e => { if (e.target.dataset.pick !== undefined) pickCandidate(+e.target.dataset.pick); });
     $("q").addEventListener("keydown", e => { if (e.key === "Enter") lookup(); });
     $("manual").addEventListener("click", () => { clearFields(); $("authors").focus(); });
     $("clear").addEventListener("click", clearFields);

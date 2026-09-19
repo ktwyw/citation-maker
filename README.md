@@ -1,7 +1,7 @@
 # Citation maker — APA, Vancouver, GOST
 
-Look a paper up by DOI or title, check and correct the fields, and get the
-reference in **APA 7**, **Vancouver**, **GOST 7.1-2003** (the standard adopted
+Look a paper up by DOI or title, or a book by ISBN or title, check and
+correct the fields, and get the reference in **APA 7**, **Vancouver**, **GOST 7.1-2003** (the standard adopted
 in Kazakhstan as СТ РК ГОСТ 7.1-2003) and **GOST R 7.0.5-2008** (the short
 form many Russian journals use). Build a bibliography, copy it in any style,
 or export RIS (Zotero, Mendeley, EndNote) or BibTeX (LaTeX, JabRef).
@@ -13,11 +13,14 @@ Two versions with the same formatting rules:
 
 ## Can you trust the output?
 
-Trust the structure; check the fields. Metadata comes from CrossRef, the
-registry publishers deposit into when they register a DOI, so for journal
+Trust the structure; check the fields. Article metadata comes from CrossRef,
+the registry publishers deposit into when they register a DOI, so for journal
 articles from established publishers the DOI, title, journal, year, volume
-and author surnames are the publisher's own record. The tool never invents a
-field: it either has data or leaves a gap and tells you.
+and author surnames are the publisher's own record. Book metadata comes from
+Open Library, a catalogue built from library records and user contributions:
+good for title, author, publisher and ISBN, less consistent for place,
+edition and page count. The tool never invents a field: it either has data or
+leaves a gap and tells you.
 
 What to check every time:
 
@@ -28,8 +31,9 @@ What to check every time:
   button lowercases everything, then you re-capitalise proper nouns.
 - **Journal names** — Vancouver uses the abbreviation, APA and GOST the full
   name; CrossRef doesn't always supply both.
-- **Books and chapters** — patchier metadata; GOST wants a place of
-  publication, which CrossRef often lacks.
+- **Books** — a title search lists up to five candidates; pick the right
+  edition, then check place, edition, year and page count against the title
+  page. An ISBN goes straight to that edition and is the most reliable route.
 - **Title search** — fuzzy. Confirm the DOI matches the paper you mean.
 - **No DOI** — many Kazakhstani and Russian journals, older papers and grey
   literature. Use manual entry.
@@ -41,7 +45,8 @@ the common gaps above.
 
 ## Web version
 
-1. Paste a DOI (or a title) and click **Look up**, or click **Enter manually**.
+1. Choose **Article** or **Book**, paste a DOI, ISBN or title, and click
+   **Look up** — or click **Enter manually**.
 2. Correct anything in the form; all four references update as you type.
 3. Copy the one you need, or **Add to bibliography**. The list is saved in
    your browser; choose a style, sort by author or as added, then copy,
@@ -49,7 +54,8 @@ the common gaps above.
    its BibTeX entry with a generated key such as `bekova2025deep`.
 
 The page must be served from a normal web address (GitHub Pages or opened
-locally) for the CrossRef lookup to work; some sandboxed previews block it.
+locally) for the CrossRef and Open Library lookups to work; some sandboxed
+previews block them.
 
 ## Command line
 
@@ -58,6 +64,8 @@ python cite.py 10.1038/s41586-020-2649-2              # all four styles
 python cite.py 10.1038/s41586-020-2649-2 --style gost71
 python cite.py 10.1038/s41586-020-2649-2 --style bibtex >> refs.bib
 python cite.py --title "Attention is all you need"    # best match; confirm the DOI
+python cite.py --isbn 9781292092621                    # a book by ISBN
+python cite.py --book "Marketing Management" --author Kotler   # a book by title; pick the edition
 python cite.py 10.1234/x --json > ref.json             # save the record, edit it…
 python cite.py --from ref.json --sentence-case         # …then format the edited record
 python cite.py --template                              # blank record for a source without a DOI
@@ -75,6 +83,8 @@ given names are initials only`.
 - **7.0.5-2008** short form: `Author A. A., Author B. B. Title // Journal.
   Year. Т. 5. № 3. С. 45–52.` with `и др.` after three authors.
 - Cyrillic sources get Т./№/С.; Latin-script sources get Vol./№/P.
+- Books: `Author, I. O. Title / I. O. Author. – 3rd ed. – Place : Publisher,
+  Year. – 320 p. – ISBN …`
 
 ## Ideas for next steps
 
