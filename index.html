@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Citation maker — APA, Vancouver, GOST</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F3F5F4;
+      --card: #FFFFFF;
+      --ink: #172420;
+      --muted: #5E6F6A;
+      --line: #D5DDDA;
+      --accent: #0B6E6A;
+      --accent-ink: #FFFFFF;
+      --warn-bg: #FFF4D6;
+      --warn: #8A5A00;
+      --miss: #FDE7E4;
+      --code-bg: #F7F9F8;
+      --font: "Public Sans", "Segoe UI", system-ui, sans-serif;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #101816; --card: #182422; --ink: #E6EEEB; --muted: #94A7A1; --line: #2B3B37;
+        --accent: #3FBFB5; --accent-ink: #0F1A18; --warn-bg: #3D2F0A; --warn: #F2C965; --miss: #4A1F1B; --code-bg: #121C1A;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #101816; --card: #182422; --ink: #E6EEEB; --muted: #94A7A1; --line: #2B3B37;
+      --accent: #3FBFB5; --accent-ink: #0F1A18; --warn-bg: #3D2F0A; --warn: #F2C965; --miss: #4A1F1B; --code-bg: #121C1A;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); line-height: 1.5; }
+    main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 56px; }
+    h1 { margin: 0 0 4px; font-size: 1.8rem; font-weight: 700; }
+    .lead { margin: 0 0 20px; color: var(--muted); max-width: 66ch; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+    .card + .card { margin-top: 18px; }
+    h2 { margin: 0 0 12px; font-size: 1rem; font-weight: 700; }
+    .sub { margin: -6px 0 12px; color: var(--muted); font-size: 0.85rem; }
+
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin: 10px 0 4px; }
+    input, select, textarea {
+      width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px 11px;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+    .missing { background: var(--miss); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .lookup { display: flex; gap: 8px; }
+    .lookup input { flex: 1; }
+
+    button {
+      font: inherit; font-weight: 500; padding: 8px 15px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); white-space: nowrap;
+    }
+    button.secondary { background: transparent; color: var(--accent); }
+    button.ghost { background: transparent; color: var(--muted); border-color: var(--line); font-size: 0.8rem; padding: 4px 10px; }
+    button:disabled { opacity: .5; cursor: default; }
+    button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+    .warnings { margin: 12px 0 0; padding: 0; list-style: none; }
+    .warnings li { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 6px 10px; font-size: 0.85rem; margin-top: 6px; }
+    .status { color: var(--muted); font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; }
+
+    .out { margin-top: 10px; }
+    .out h3 { margin: 12px 0 4px; font-size: 0.8rem; color: var(--muted); font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+    .ref { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; line-height: 1.55; word-wrap: break-word; }
+    .ref i { font-style: italic; }
+
+    .bib { margin: 0; padding: 0; list-style: none; }
+    .bib li { border-top: 1px solid var(--line); padding: 8px 0; display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; font-size: 0.88rem; }
+    .bib li:first-child { border-top: none; }
+    .bib .empty { color: var(--muted); }
+    .bib .btns { display: flex; gap: 6px; flex: none; }
+
+    footer { margin-top: 24px; font-size: 0.82rem; color: var(--muted); max-width: 80ch; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Citation maker</h1>
+    <p class="lead">Look a paper up by DOI or title, check and correct the fields, and get the reference in APA 7, Vancouver, GOST 7.1-2003 and GOST R 7.0.5-2008. Nothing is invented: every field comes from the publisher's own record on CrossRef or from you.</p>
+
+    <div class="grid">
+      <!-- ---------- left: lookup + fields ---------- -->
+      <div>
+        <div class="card">
+          <h2>1. Find or enter the source</h2>
+          <div class="lookup">
+            <input id="q" type="text" placeholder="DOI (10.1234/abcd) or a paper title" autocomplete="off">
+            <button id="lookup" type="button">Look up</button>
+          </div>
+          <p id="status" class="status"></p>
+          <div class="actions">
+            <button id="manual" class="secondary" type="button">Enter manually</button>
+            <button id="clear" class="ghost" type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>2. Check the fields</h2>
+          <p class="sub">Red fields are missing for this source type. Edit anything; the references update as you type.</p>
+
+          <label for="type">Type</label>
+          <select id="type">
+            <option value="journal-article">Journal article</option>
+            <option value="book">Book</option>
+            <option value="book-chapter">Book chapter</option>
+            <option value="proceedings-article">Conference paper</option>
+            <option value="other">Other / web document</option>
+          </select>
+
+          <label for="authors">Authors — one per line as <em>Surname, Given names</em></label>
+          <textarea id="authors" placeholder="Smith, John Paul&#10;Ахметова, Айгүл"></textarea>
+
+          <label for="title">Title <button id="sentence" class="ghost" type="button" title="Lowercase all but the first word, words after a colon, and acronyms (check proper nouns afterwards)">sentence case</button></label>
+          <textarea id="title"></textarea>
+
+          <label for="container" id="container-label">Journal</label>
+          <input id="container" type="text">
+          <label for="short" id="short-label">Journal abbreviation (for Vancouver)</label>
+          <input id="short" type="text">
+
+          <div class="row3">
+            <div><label for="year">Year</label><input id="year" type="text" inputmode="numeric"></div>
+            <div><label for="volume">Volume</label><input id="volume" type="text"></div>
+            <div><label for="issue">Issue</label><input id="issue" type="text"></div>
+          </div>
+          <div class="row">
+            <div><label for="pages">Pages (e.g. 45–52) or article number</label><input id="pages" type="text"></div>
+            <div><label for="doi">DOI</label><input id="doi" type="text"></div>
+          </div>
+          <div class="row">
+            <div><label for="publisher">Publisher</label><input id="publisher" type="text"></div>
+            <div><label for="place">Place of publication</label><input id="place" type="text"></div>
+          </div>
+          <label for="editors">Editors — one per line (for chapters and proceedings)</label>
+          <textarea id="editors"></textarea>
+          <label for="url">URL (if no DOI)</label>
+          <input id="url" type="text">
+
+          <ul id="warnings" class="warnings"></ul>
+        </div>
+      </div>
+
+      <!-- ---------- right: output + bibliography ---------- -->
+      <div>
+        <div class="card">
+          <h2>3. References</h2>
+          <div class="out">
+            <h3>APA 7 <button class="ghost" data-copy="apa" type="button">copy</button></h3>
+            <div id="apa" class="ref"></div>
+            <h3>Vancouver <button class="ghost" data-copy="van" type="button">copy</button></h3>
+            <div id="van" class="ref"></div>
+            <h3>GOST 7.1-2003 (СТ РК) <button class="ghost" data-copy="gost71" type="button">copy</button></h3>
+            <div id="gost71" class="ref"></div>
+            <h3>GOST R 7.0.5-2008 <button class="ghost" data-copy="gost705" type="button">copy</button></h3>
+            <div id="gost705" class="ref"></div>
+          </div>
+          <div class="actions">
+            <button id="add" type="button">Add to bibliography</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>4. Bibliography</h2>
+          <p class="sub">Saved in this browser. Choose a style and copy the whole list, or export RIS to import into Zotero, Mendeley or EndNote.</p>
+          <div class="row">
+            <div><label for="bibstyle">Style</label>
+              <select id="bibstyle">
+                <option value="apa">APA 7</option><option value="van">Vancouver</option>
+                <option value="gost71">GOST 7.1-2003</option><option value="gost705">GOST R 7.0.5-2008</option>
+              </select></div>
+            <div><label for="sort">Order</label>
+              <select id="sort"><option value="author">By first author</option><option value="added">As added</option></select></div>
+          </div>
+          <ul id="bib" class="bib"></ul>
+          <div class="actions">
+            <button id="copyall" class="secondary" type="button">Copy list</button>
+            <button id="downtxt" class="secondary" type="button">Download .txt</button>
+            <button id="downris" class="secondary" type="button">Export RIS</button>
+            <button id="clearbib" class="ghost" type="button">Clear bibliography</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Trust the structure, check the fields. CrossRef metadata is reliable for DOI, title, journal, year and volume from established publishers; author given names are often initials only, online-first articles may lack pages, and titles are sometimes deposited in capitals. Title search is fuzzy: confirm the DOI matches the paper you mean. GOST 7.1-2003 is the version adopted in Kazakhstan (СТ РК ГОСТ 7.1-2003); journals apply house variants, so glance at the author guidelines. Sources without a DOI need manual entry.</p>
+    </footer>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const FIELDS = ["type", "authors", "title", "container", "short", "year", "volume", "issue", "pages", "doi", "publisher", "place", "editors", "url"];
+    const REQUIRED = {
+      "journal-article": ["authors", "title", "container", "year"],
+      "book": ["authors", "title", "publisher", "year"],
+      "book-chapter": ["authors", "title", "container", "publisher", "year"],
+      "proceedings-article": ["authors", "title", "container", "year"],
+      "other": ["title", "year"],
+    };
+
+    // ---------- CrossRef ----------
+    const MAILTO = "citation-maker@example.com";   // polite-pool header; replace with yours
+    async function crossref(path) {
+      const r = await fetch(`https://api.crossref.org/${path}${path.includes("?") ? "&" : "?"}mailto=${MAILTO}`);
+      if (!r.ok) throw new Error(`CrossRef replied ${r.status}`);
+      return (await r.json()).message;
+    }
+
+    function fromCrossref(w) {
+      const typeMap = { "journal-article": "journal-article", "book": "book", "monograph": "book", "edited-book": "book",
+                        "book-chapter": "book-chapter", "proceedings-article": "proceedings-article" };
+      const people = list => (list || []).map(a => a.family ? `${a.family}, ${a.given || ""}`.replace(/, $/, "") : (a.name || "")).filter(Boolean).join("\n");
+      const date = w.issued?.["date-parts"]?.[0]?.[0] || w["published-print"]?.["date-parts"]?.[0]?.[0] || w["published-online"]?.["date-parts"]?.[0]?.[0] || "";
+      return {
+        type: typeMap[w.type] || "other",
+        authors: people(w.author),
+        editors: people(w.editor),
+        title: cleanTitle((w.title || [])[0] || ""),
+        container: (w["container-title"] || [])[0] || "",
+        short: (w["short-container-title"] || [])[0] || "",
+        year: String(date),
+        volume: w.volume || "",
+        issue: w.issue || "",
+        pages: w.page ? w.page.replace("-", "–") : (w["article-number"] || ""),
+        doi: w.DOI || "",
+        publisher: w.publisher || "",
+        place: w["publisher-location"] || "",
+        url: "",
+      };
+    }
+    const cleanTitle = t => t.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+
+    async function lookup() {
+      const q = $("q").value.trim();
+      if (!q) return;
+      const status = $("status");
+      status.textContent = "Looking up…";
+      $("lookup").disabled = true;
+      try {
+        const doiMatch = q.match(/10\.\d{4,9}\/[^\s"<>]+/i);
+        let w, note;
+        if (doiMatch) {
+          w = await crossref(`works/${encodeURIComponent(doiMatch[0].replace(/[.,;)]+$/, ""))}`);
+          note = "Fetched by DOI from CrossRef.";
+        } else {
+          const res = await crossref(`works?query.bibliographic=${encodeURIComponent(q)}&rows=1`);
+          w = res.items?.[0];
+          if (!w) throw new Error("no match");
+          note = `Best title match — confirm the DOI ${w.DOI} is the paper you mean.`;
+        }
+        setFields(fromCrossref(w));
+        status.textContent = note;
+      } catch (err) {
+        status.textContent = /Failed to fetch|NetworkError/.test(err.message)
+          ? "Couldn't reach CrossRef (offline, or this page is sandboxed). Use manual entry."
+          : `Not found (${err.message}). Check the DOI or use manual entry.`;
+      } finally { $("lookup").disabled = false; }
+    }
+
+    // ---------- fields ----------
+    function getFields() { const f = {}; FIELDS.forEach(k => f[k] = $(k).value.trim()); return f; }
+    function setFields(f) { FIELDS.forEach(k => { if (k in f) $(k).value = f[k]; }); render(); }
+    function clearFields() { FIELDS.forEach(k => $(k).value = k === "type" ? "journal-article" : ""); $("status").textContent = ""; render(); }
+
+    // ---------- people ----------
+    const isCyr = s => /[\u0400-\u04FF]/.test(s);
+    function parsePeople(text) {
+      return text.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+        const [family, given = ""] = l.split(",").map(s => s.trim());
+        return { family, given };
+      });
+    }
+    const initials = (given, sep) => given.split(/[\s]+/).filter(Boolean)
+      .map(part => part.split("-").map(p => p[0].toUpperCase() + ".").join("-")).join(sep);
+    // "I. O. Surname" (GOST statement of responsibility)
+    const gostName = p => p.given ? `${initials(p.given, " ")} ${p.family}` : p.family;
+    // "Surname, I. O." (GOST heading, APA)
+    const headName = p => p.given ? `${p.family}, ${initials(p.given, " ")}` : p.family;
+    // "Surname IO" (Vancouver)
+    const vanName = p => p.given ? `${p.family} ${initials(p.given, "").replace(/[.\-]/g, "")}` : p.family;
+
+    // ---------- helpers ----------
+    const dash = s => s.replace(/(\d)\s*-\s*(\d)/g, "$1–$2");
+    const endDot = s => /[.!?]$/.test(s) ? s : s + ".";
+    const doiUrl = d => d ? `https://doi.org/${d.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}` : "";
+    const esc = s => s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const em = s => s ? `<i>${esc(s)}</i>` : "";
+
+    function sentenceCase(t) {
+      const words = t.split(" ");
+      // If the whole title is uppercase, acronyms can't be told apart, so lowercase everything.
+      const allCaps = t === t.toUpperCase();
+      let first = true;
+      return words.map((w, i) => {
+        const keep = !allCaps && /^[A-ZА-ЯЁ0-9\-]{2,6}$/.test(w.replace(/[:,.;]$/, ""));   // acronyms in mixed-case titles
+        let out = keep ? w : w.toLowerCase();
+        if (first || (i > 0 && /:$/.test(words[i - 1]))) out = out[0].toUpperCase() + out.slice(1);
+        first = false;
+        return out;
+      }).join(" ");
+    }
+
+    // ---------- styles ----------
+    function apa(f) {
+      const A = parsePeople(f.authors), E = parsePeople(f.editors);
+      let names;
+      if (A.length === 0) names = "";
+      else if (A.length === 1) names = headName(A[0]);
+      else if (A.length <= 20) names = A.slice(0, -1).map(headName).join(", ") + ", & " + headName(A[A.length - 1]);
+      else names = A.slice(0, 19).map(headName).join(", ") + ", … " + headName(A[A.length - 1]);
+      const yr = f.year ? `(${f.year}).` : "(n.d.).";
+      const link = f.doi ? doiUrl(f.doi) : f.url;
+      const eds = E.length ? E.map(p => p.given ? `${initials(p.given, " ")} ${p.family}` : p.family).join(", ") + (E.length > 1 ? " (Eds.)," : " (Ed.),") : "";
+      const vol = f.volume ? `, ${em(f.volume)}${f.issue ? `(${esc(f.issue)})` : ""}` : (f.issue ? `, (${esc(f.issue)})` : "");
+      const pg = f.pages ? `, ${esc(dash(f.pages))}` : "";
+      let body;
+      switch (f.type) {
+        case "journal-article": case "proceedings-article":
+          body = `${endDot(esc(f.title))} ${em(f.container)}${vol}${pg}.`; break;
+        case "book":
+          body = `${em(endDot(f.title))} ${esc(f.publisher)}.`; break;
+        case "book-chapter":
+          body = `${endDot(esc(f.title))} In ${eds ? eds + " " : ""}${em(f.container)}${f.pages ? ` (pp. ${esc(dash(f.pages))})` : ""}. ${esc(f.publisher)}.`; break;
+        default:
+          body = `${em(endDot(f.title))}${f.container ? " " + esc(f.container) + "." : ""}${f.publisher ? " " + esc(f.publisher) + "." : ""}`;
+      }
+      return [names ? names + " " : "", yr + " ", body, link ? " " + esc(link) : ""].join("").replace(/\s+/g, " ").trim();
+    }
+
+    function vancouver(f) {
+      const A = parsePeople(f.authors);
+      let names = A.slice(0, 6).map(vanName).join(", ");
+      if (A.length > 6) names += ", et al";
+      const jr = f.short || f.container;
+      let body;
+      switch (f.type) {
+        case "journal-article": case "proceedings-article":
+          body = `${endDot(esc(f.title))} ${esc(jr)}. ${esc(f.year)}${f.volume ? `;${esc(f.volume)}` : ""}${f.issue ? `(${esc(f.issue)})` : ""}${f.pages ? `:${esc(dash(f.pages))}` : ""}.`; break;
+        case "book":
+          body = `${endDot(esc(f.title))} ${f.place ? esc(f.place) + ": " : ""}${esc(f.publisher)}; ${esc(f.year)}.`; break;
+        case "book-chapter": {
+          const E = parsePeople(f.editors).map(vanName).join(", ");
+          body = `${endDot(esc(f.title))} In: ${E ? E + (parsePeople(f.editors).length > 1 ? ", editors. " : ", editor. ") : ""}${endDot(esc(f.container))} ${f.place ? esc(f.place) + ": " : ""}${esc(f.publisher)}; ${esc(f.year)}.${f.pages ? ` p. ${esc(dash(f.pages))}.` : ""}`; break;
+        }
+        default:
+          body = `${endDot(esc(f.title))} ${esc(f.container || f.publisher)}. ${esc(f.year)}.`;
+      }
+      const link = f.doi ? ` doi:${esc(f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, ""))}` : (f.url ? ` Available from: ${esc(f.url)}` : "");
+      return `${names ? names + ". " : ""}${body}${link}`.replace(/\s+/g, " ").trim();
+    }
+
+    // GOST 7.1-2003: heading for 1–3 authors; 4+ described under title with first three [et al.]
+    function gost71(f) {
+      const A = parsePeople(f.authors), E = parsePeople(f.editors);
+      const cyr = isCyr(f.title + f.authors);
+      const T = cyr ? { vol: "Т.", no: "№", p: "С.", etal: "[и др.]", ed: "под ред.", in: "" } : { vol: "Vol.", no: "№", p: "P.", etal: "[et al.]", ed: "ed. by", in: "" };
+      const heading = A.length >= 1 && A.length <= 3 ? headName(A[0]) + " " : "";
+      const resp = A.length === 0 ? "" : A.length <= 3 ? A.map(gostName).join(", ") : A.slice(0, 3).map(gostName).join(", ") + " " + T.etal;
+      const pages = f.pages ? (/[–-]/.test(f.pages) ? `${T.p} ${dash(f.pages)}` : (cyr ? `Ст. ${f.pages}` : `Art. ${f.pages}`)) : "";
+      const doi = f.doi ? `DOI: ${f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}` : (f.url ? `URL: ${f.url}` : "");
+      const join = parts => parts.filter(Boolean).map(esc).join(". – ") + ".";
+      switch (f.type) {
+        case "journal-article": case "proceedings-article": {
+          const src = `${f.title} / ${resp} // ${f.container}`;
+          const volIss = [f.volume ? `${T.vol} ${f.volume}` : "", f.issue ? `${T.no} ${f.issue}` : ""].filter(Boolean).join(", ");
+          return esc(heading) + join([src, f.year, volIss, pages, doi]);
+        }
+        case "book": {
+          const src = `${f.title} / ${resp}`;
+          const pub = [f.place, f.publisher].filter(Boolean).join(" : ") + (f.year ? `, ${f.year}` : "");
+          return esc(heading) + join([src, pub, f.pages ? `${f.pages} ${cyr ? "с" : "p"}` : "", doi]);
+        }
+        case "book-chapter": {
+          const eds = E.length ? ` / ${T.ed} ${E.map(gostName).join(", ")}` : "";
+          const src = `${f.title} / ${resp} // ${f.container}${eds}`;
+          const pub = [f.place, f.publisher].filter(Boolean).join(" : ") + (f.year ? `, ${f.year}` : "");
+          return esc(heading) + join([src, pub, pages, doi]);
+        }
+        default:
+          return esc(heading) + join([`${f.title}${resp ? " / " + resp : ""}${f.container ? " // " + f.container : ""}`, f.publisher, f.year, doi]);
+      }
+    }
+
+    // GOST R 7.0.5-2008 (short form used in reference lists of many Russian journals)
+    function gost705(f) {
+      const A = parsePeople(f.authors);
+      const cyr = isCyr(f.title + f.authors);
+      const T = cyr ? { vol: "Т.", no: "№", p: "С." } : { vol: "Vol.", no: "№", p: "P." };
+      const names = A.length <= 3 ? A.map(p => p.given ? `${p.family} ${initials(p.given, " ")}` : p.family).join(", ")
+                                  : A.slice(0, 3).map(p => p.given ? `${p.family} ${initials(p.given, " ")}` : p.family).join(", ") + (cyr ? " и др." : " et al.");
+      const doi = f.doi ? ` DOI: ${esc(f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, ""))}` : (f.url ? ` URL: ${esc(f.url)}` : "");
+      const pages = f.pages ? (/[–-]/.test(f.pages) ? ` ${T.p} ${esc(dash(f.pages))}.` : ` ${cyr ? "Ст." : "Art."} ${esc(f.pages)}.`) : "";
+      switch (f.type) {
+        case "journal-article": case "proceedings-article":
+          return `${esc(names)}${names ? " " : ""}${esc(f.title)} // ${esc(f.container)}. ${esc(f.year)}.${f.volume ? ` ${T.vol} ${esc(f.volume)}.` : ""}${f.issue ? ` ${T.no} ${esc(f.issue)}.` : ""}${pages}${doi}`.trim();
+        case "book":
+          return `${esc(names)}${names ? " " : ""}${esc(f.title)}. ${[f.place, f.publisher].filter(Boolean).map(esc).join(": ")}, ${esc(f.year)}.${f.pages ? ` ${esc(f.pages)} ${cyr ? "с" : "p"}.` : ""}${doi}`.trim();
+        case "book-chapter":
+          return `${esc(names)}${names ? " " : ""}${esc(f.title)} // ${esc(f.container)}. ${[f.place, f.publisher].filter(Boolean).map(esc).join(": ")}, ${esc(f.year)}.${pages}${doi}`.trim();
+        default:
+          return `${esc(names)}${names ? " " : ""}${esc(f.title)}.${f.container ? " " + esc(f.container) + "." : ""} ${esc(f.year)}.${doi}`.trim();
+      }
+    }
+
+    // ---------- warnings ----------
+    function warnings(f) {
+      const w = [];
+      const A = parsePeople(f.authors);
+      if (A.length && A.every(p => /^([A-ZА-ЯЁ]\.?\s?)+$/.test(p.given || ""))) w.push("Authors have initials only — fine for Vancouver and GOST, but APA and some journals want full given names. Check the paper.");
+      if (A.some(p => !p.given)) w.push("An author has no given name. Check name order (family name first).");
+      if (f.title && f.title === f.title.toUpperCase() && f.title.length > 10) w.push("Title is in capitals as deposited. Use the sentence-case button, then check proper nouns.");
+      if (f.type === "journal-article" && !f.pages) w.push("No pages or article number — the article may be online-first. Add them when known.");
+      if (f.type === "journal-article" && !f.volume) w.push("No volume — may be online-first or a journal without volumes.");
+      if (!f.doi && !f.url) w.push("No DOI or URL.");
+      if (f.type === "book" && !f.place) w.push("GOST wants a place of publication for books; CrossRef often lacks it.");
+      return w;
+    }
+
+    // ---------- render ----------
+    function render() {
+      const f = getFields();
+      const req = REQUIRED[f.type] || [];
+      FIELDS.forEach(k => $(k).classList.toggle("missing", req.includes(k) && !f[k]));
+      const isBook = f.type === "book";
+      $("container-label").textContent = f.type === "book-chapter" ? "Book title" : f.type === "proceedings-article" ? "Conference / proceedings title" : "Journal";
+      $("container").disabled = isBook; $("short").disabled = f.type !== "journal-article";
+      $("apa").innerHTML = apa(f); $("van").innerHTML = vancouver(f); $("gost71").innerHTML = gost71(f); $("gost705").innerHTML = gost705(f);
+      $("warnings").innerHTML = warnings(f).map(w => `<li>${w}</li>`).join("");
+      $("add").disabled = !f.title;
+    }
+    const STYLE = { apa, van: vancouver, gost71, gost705 };
+    const plain = html => { const d = document.createElement("div"); d.innerHTML = html; return d.textContent; };
+
+    // ---------- bibliography ----------
+    let bib = [];
+    try { bib = JSON.parse(localStorage.getItem("bib") || "[]"); } catch (_) {}
+    const saveBib = () => { try { localStorage.setItem("bib", JSON.stringify(bib)); } catch (_) {} };
+    function orderedBib() {
+      const list = bib.map((f, i) => ({ f, i }));
+      if ($("sort").value === "author") list.sort((a, b) => (parsePeople(a.f.authors)[0]?.family || a.f.title).localeCompare(parsePeople(b.f.authors)[0]?.family || b.f.title));
+      return list;
+    }
+    function renderBib() {
+      const style = STYLE[$("bibstyle").value];
+      const list = orderedBib();
+      $("bib").innerHTML = list.length ? list.map(({ f, i }, n) =>
+        `<li><span>${n + 1}. ${style(f)}</span><span class="btns"><button class="ghost" data-edit="${i}" type="button">edit</button><button class="ghost" data-del="${i}" type="button">✕</button></span></li>`).join("")
+        : `<li class="empty">Nothing saved yet. Format a reference and click "Add to bibliography".</li>`;
+    }
+    function bibText() { const style = STYLE[$("bibstyle").value]; return orderedBib().map(({ f }, n) => `${n + 1}. ${plain(style(f))}`).join("\n"); }
+    function ris() {
+      const ty = { "journal-article": "JOUR", "book": "BOOK", "book-chapter": "CHAP", "proceedings-article": "CONF", "other": "GEN" };
+      return orderedBib().map(({ f }) => {
+        const L = [`TY  - ${ty[f.type] || "GEN"}`];
+        parsePeople(f.authors).forEach(p => L.push(`AU  - ${p.family}${p.given ? ", " + p.given : ""}`));
+        parsePeople(f.editors).forEach(p => L.push(`ED  - ${p.family}${p.given ? ", " + p.given : ""}`));
+        L.push(`TI  - ${f.title}`);
+        if (f.container) L.push(`${f.type === "journal-article" ? "JO" : "T2"}  - ${f.container}`);
+        if (f.year) L.push(`PY  - ${f.year}`);
+        if (f.volume) L.push(`VL  - ${f.volume}`);
+        if (f.issue) L.push(`IS  - ${f.issue}`);
+        if (f.pages) { const [sp, ep] = dash(f.pages).split("–"); L.push(`SP  - ${sp}`); if (ep) L.push(`EP  - ${ep}`); }
+        if (f.publisher) L.push(`PB  - ${f.publisher}`);
+        if (f.place) L.push(`CY  - ${f.place}`);
+        if (f.doi) L.push(`DO  - ${f.doi.replace(/^https?:\/\/(dx\.)?doi\.org\//i, "")}`);
+        if (f.url) L.push(`UR  - ${f.url}`);
+        L.push("ER  - ");
+        return L.join("\n");
+      }).join("\n\n") + "\n";
+    }
+    function download(text, name, type) {
+      const url = URL.createObjectURL(new Blob([text], { type }));
+      const a = Object.assign(document.createElement("a"), { href: url, download: name }); a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    async function copy(text, btn) {
+      try { await navigator.clipboard.writeText(text); const t = btn.textContent; btn.textContent = "copied"; setTimeout(() => btn.textContent = t, 1200); }
+      catch (_) { btn.textContent = "select & copy"; }
+    }
+
+    // ---------- events ----------
+    $("lookup").addEventListener("click", lookup);
+    $("q").addEventListener("keydown", e => { if (e.key === "Enter") lookup(); });
+    $("manual").addEventListener("click", () => { clearFields(); $("authors").focus(); });
+    $("clear").addEventListener("click", clearFields);
+    $("sentence").addEventListener("click", () => { $("title").value = sentenceCase($("title").value); render(); });
+    FIELDS.forEach(k => $(k).addEventListener("input", render));
+    document.querySelectorAll("[data-copy]").forEach(b => b.addEventListener("click", () => copy(plain($(b.dataset.copy).innerHTML), b)));
+    $("add").addEventListener("click", () => { bib.push(getFields()); saveBib(); renderBib(); });
+    $("bib").addEventListener("click", e => {
+      if (e.target.dataset.del !== undefined) { bib.splice(+e.target.dataset.del, 1); saveBib(); renderBib(); }
+      if (e.target.dataset.edit !== undefined) { const i = +e.target.dataset.edit; setFields(bib[i]); bib.splice(i, 1); saveBib(); renderBib(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+    });
+    $("bibstyle").addEventListener("change", renderBib);
+    $("sort").addEventListener("change", renderBib);
+    $("copyall").addEventListener("click", e => copy(bibText(), e.target));
+    $("downtxt").addEventListener("click", () => download(bibText(), "bibliography.txt", "text/plain"));
+    $("downris").addEventListener("click", () => download(ris(), "bibliography.ris", "application/x-research-info-systems"));
+    $("clearbib").addEventListener("click", () => { if (confirm("Remove all saved references?")) { bib = []; saveBib(); renderBib(); } });
+
+    render(); renderBib();
+  </script>
+</body>
+</html>
